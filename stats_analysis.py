@@ -1,25 +1,19 @@
 import pandas as pd
-import plotly.graph_objects as go
-from datetime import datetime
 import numpy as np
+import matplotlib.pyplot as plt
+from math import pi
 import streamlit as st
 
-# =============================================================================
-# CONFIGURACIÓN DE CATEGORÍAS Y MÁXIMOS (ACTUALIZADA CON HOMBRO)
-# =============================================================================
+# Configuración de categorías y máximos
 CATEGORIAS = {
     "pata": ["sentadilla frontal", "sentadilla trasera", "peso muerto"],
     "culaso": ["puente de glúteo"],
     "espalda": ["dominada", "remo polea", "jalón al pecho"],
     "pechito": ["press banca"],
-    "hombro": ["press militar"],  # Nueva categoría
+    "hombro": ["press militar"],
     "biceps": ["biceps máquina", "biceps libre unilateral"],
     "triceps": ["triceps polea"],
     "core": ["plancha"]
-}
-
-PESO_EJERCICIOS = {
-    "espalda": {"dominada": 2.0, "remo polea": 1.2, "jalón al pecho": 1.0}
 }
 
 MAXIMOS = {
@@ -28,7 +22,7 @@ MAXIMOS = {
         "culaso": {"puente de glúteo": 80},
         "espalda": {"dominada": 50, "remo polea": 60, "jalón al pecho": 55},
         "pechito": {"press banca": 50},
-        "hombro": {"press militar": 40},  # Nuevo máximo para hombro
+        "hombro": {"press militar": 40},
         "biceps": {"biceps máquina": 25, "biceps libre unilateral": 20},
         "triceps": {"triceps polea": 25},
         "core": {"plancha": 90}
@@ -38,49 +32,21 @@ MAXIMOS = {
         "culaso": {"puente de glúteo": 140},
         "espalda": {"dominada": 70, "remo polea": 90, "jalón al pecho": 80},
         "pechito": {"press banca": 100},
-        "hombro": {"press militar": 70},  # Nuevo máximo para hombro
+        "hombro": {"press militar": 70},
         "biceps": {"biceps máquina": 35, "biceps libre unilateral": 30},
         "triceps": {"triceps polea": 40},
         "core": {"plancha": 120}
     }
 }
 
-# =============================================================================
-# FUNCIONES DE CÁLCULO (ACTUALIZADAS, CON NOMBRES ORIGINALES)
-# =============================================================================
-def obtener_ultimo_registro_ejercicio(df, ejercicio):
-    """Obtiene el último peso registrado para un ejercicio específico"""
-    registros = df[ejercicio].dropna()
-    return registros.iloc[-1] if not registros.empty else 0
-
 def calcular_puntuacion_grupo(df, categoria, genero):
-    """Calcula la puntuación para una categoría específica"""
+    """Calcula la puntuación para una categoría específica."""
     ejercicios = CATEGORIAS[categoria]
     total = 0
     peso_total = 0
     
-    # Caso especial para bíceps
-    if categoria == "biceps":
-        # Obtener el último registro entre las dos opciones
-        ultimos_registros = [
-            obtener_ultimo_registro_ejercicio(df, ej) 
-            for ej in ejercicios
-        ]
-        ejercicio_usado = ejercicios[np.argmax(ultimos_registros)]  # El que tenga valor más reciente
-        peso = max(ultimos_registros)
-        maximo = MAXIMOS[genero][categoria][ejercicio_usado]
-        
-        # Convertir peso a número
-        try:
-            peso = float(peso)
-        except (ValueError, TypeError):
-            peso = 0.0
-        
-        return (peso / maximo) * 10 if maximo != 0 else 0
-    
-    # Para otras categorías
     for ejercicio in ejercicios:
-        peso = obtener_ultimo_registro_ejercicio(df, ejercicio)
+        peso = df[ejercicio].iloc[-1] if ejercicio in df.columns else 0
         
         # Convertir peso a número
         try:
@@ -92,51 +58,42 @@ def calcular_puntuacion_grupo(df, categoria, genero):
             continue
             
         # Obtener ponderación y máximo
-        ponderacion = PESO_EJERCICIOS.get(categoria, {}).get(ejercicio, 1.0)
         maximo = MAXIMOS[genero][categoria][ejercicio]
         
         # Calcular contribución
-        contribucion = (peso / maximo) * 10 * ponderacion
+        contribucion = (peso / maximo) * 10
         total += contribucion
-        peso_total += ponderacion
+        peso_total += 1
     
     return min(total / peso_total, 10) if peso_total > 0 else 0
 
 def generar_radar_chart(puntuaciones):
-    """Genera el gráfico de araña con Plotly"""
+    """Genera un gráfico de araña con las puntuaciones."""
     categorias = list(puntuaciones.keys())
-    valores = list(puntuaciones.values()) + [list(puntuaciones.values())[0]]  # Cerrar el círculo
+    valores = list(puntuaciones.values())
     
-    fig = go.Figure(
-        data=go.Scatterpolar(
-            r=valores,
-            theta=categorias + [categorias[0]],
-            fill="toself",
-            line=dict(color="#FF6B6B", width=2),
-            marker=dict(size=8)
-        ),
-        layout=go.Layout(
-            polar=dict(
-                radialaxis=dict(
-                    visible=True,
-                    range=[0, 10],
-                    tickfont=dict(color="#4ECDC4"),
-                    gridcolor="#4ECDC4"
-                )
-            ),
-            paper_bgcolor="#2D3047",
-            font=dict(color="#FFFFFF"),
-            title="- - - ",
-            title_font=dict(size=20)
-        )
-    )
+    # Cerrar el círculo del radar
+    valores += valores[:1]
+    angulos = [n / len(categorias) * 2 * pi for n in range(len(categorias))]
+    angulos += angulos[:1]
+    
+    # Configurar gráfico
+    fig, ax = plt.subplots(figsize=(8, 8), subplot_kw={'polar': True})
+    ax.plot(angulos, valores, linewidth=1, linestyle='solid')
+    ax.fill(angulos, valores, alpha=0.25)
+    
+    # Ajustar ejes
+    ax.set_theta_offset(pi / 2)
+    ax.set_theta_direction(-1)
+    ax.set_rlabel_position(0)
+    plt.yticks([2, 4, 6, 8, 10], fontsize=10)
+    plt.ylim(0, 10)
+    
     return fig
 
-# =============================================================================
-# INTEGRACIÓN CON STREAMLIT (CON NOMBRES ORIGINALES)
-# =============================================================================
 def mostrar_analisis_fuerza(df, genero):
-    """Muestra el análisis en Streamlit"""
+    """Muestra el análisis en la interfaz de Streamlit."""
+    st.header("🏋️ Análisis de Fuerza por Grupo Muscular")
     
     if df.empty:
         st.warning("No hay datos para analizar")
@@ -148,5 +105,14 @@ def mostrar_analisis_fuerza(df, genero):
         for categoria in CATEGORIAS.keys()
     }
     
-    fig = generar_radar_chart(puntuaciones)
-    st.plotly_chart(fig, use_container_width=True)
+    # Mostrar resultados
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        st.subheader("Puntuaciones")
+        for cat, score in puntuaciones.items():
+            st.metric(label=cat.capitalize(), value=f"{score:.1f}/10")
+    
+    with col2:
+        st.subheader("Gráfico de Progreso")
+        fig = generar_radar_chart(puntuaciones)
+        st.pyplot(fig)

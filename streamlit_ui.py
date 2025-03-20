@@ -2,78 +2,31 @@ import streamlit as st
 from datetime import datetime
 from data_management import guardar_entrenamiento
 from data_management import existe_entrenamiento_en_fecha
-from stats_analysis import mostrar_analisis_fuerza  # Importa la función de análisis
-import os
-from PIL import Image
-from drive_utils import mostrar_imagen_desde_drive  # Importar la función para mostrar imágenes desde Drive
 
-
-def obtener_ultima_imagen(carpeta_imagenes):
-    """Obtiene la última imagen numerada en la carpeta especificada."""
-    try:
-        # Listar archivos en la carpeta
-        archivos = [f for f in os.listdir(carpeta_imagenes) if f.endswith(('.png', '.jpg', '.jpeg'))]
-        
-        # Ordenar archivos por nombre (asumiendo que están numerados)
-        archivos.sort(key=lambda x: int(x.split('.')[0]))
-        
-        # Obtener la última imagen
-        ultima_imagen = archivos[-1] if archivos else None
-        
-        return os.path.join(carpeta_imagenes, ultima_imagen) if ultima_imagen else None
-    except Exception as e:
-        st.error(f"Error al cargar la imagen: {e}")
-        return None
-
-
-from data_management import inicializar_dataframes
-
-def setup_streamlit_ui():
+def setup_streamlit_ui(df_animalaco, df_mamasota, archivo_animalaco, archivo_mamasota):
     """Configura la interfaz de usuario de Streamlit."""
-    st.title("🏋️ DOS BUENORROS ENTRENANDO")
+    st.title("DOS BUENORROS ENTRENANDO")
 
-    # Inicializar DataFrames desde Google Sheets
-    df_animalaco, df_mamasota = inicializar_dataframes()
-    
     # Creación de las pestañas
-    tab1, tab2, tab3 = st.tabs(["🏠 Principal", "Animalaco", "Mamasota"])
+    tab1, tab2, tab3 = st.tabs(["Principal", "Animalaco", "Mamasota"])
 
     with tab1:
-        st.header("ESTADÍSTICAS DE AMBOS")
-        
-        # Crear dos columnas
-        col1, col2 = st.columns(2)
-        
-        # Gráfico de Animalaco (hombre)
-        with col1:
-            st.subheader("Animalaco")
-            mostrar_analisis_fuerza(df_animalaco, "hombre")
-        
-        # Gráfico de Mamasota (mujer)
-        with col2:
-            st.subheader("Mamasota")
-            mostrar_analisis_fuerza(df_mamasota, "mujer")
-        
-        # Mostrar la última imagen desde Google Drive
-        mostrar_imagen_desde_drive()
+        st.header("ESTADÍSTICAS")
+        st.write("Desliza para abajo para ver las estadísticas")
+        st.image("vic.jpg", caption="Imagen de ejemplo en Principal")
 
-    # Resto de las pestañas (Animalaco y Mamasota)
     with tab2:
         st.header("Pestaña Animalaco")
         st.write("Registra tu entrenamiento aquí.")
-        df_animalaco = mostrar_formulario_entrenamiento(df_animalaco, "Animalaco")
+        df_animalaco = mostrar_formulario_entrenamiento(df_animalaco, "Animalaco", archivo_animalaco)
 
     with tab3:
         st.header("Pestaña Mamasota")
         st.write("Registra tu entrenamiento aquí.")
-        df_mamasota = mostrar_formulario_entrenamiento(df_mamasota, "Mamasota")
-        
-        
-        
-def mostrar_formulario_entrenamiento(df, tab_name):
-    """
-    Muestra el formulario para registrar un entrenamiento.
-    """
+        df_mamasota = mostrar_formulario_entrenamiento(df_mamasota, "Mamasota", archivo_mamasota)
+
+def mostrar_formulario_entrenamiento(df, tab_name, archivo):
+    """Muestra el formulario para registrar un entrenamiento."""
     # Paso 1: Selección del focus y ejercicios
     st.subheader("Paso 1: Selecciona el focus y los ejercicios")
     focus = st.multiselect(
@@ -128,7 +81,7 @@ def mostrar_formulario_entrenamiento(df, tab_name):
     # Paso 2: Registro de pesos y detalles
     if st.session_state.get("mostrar_paso_2", False):
         st.subheader("Paso 2: Registra los pesos y detalles del entrenamiento")
-        with st.form(key=f"registro_entrenamiento_{tab_name}"):
+        with st.form(f"registro_entrenamiento_{tab_name}"):
             # Fecha del entrenamiento
             fecha_hora = st.date_input("Día del entrenamiento", datetime.today(), key=f"{tab_name}_fecha")
 
@@ -181,21 +134,16 @@ def mostrar_formulario_entrenamiento(df, tab_name):
                 if st.form_submit_button("Registrar entrenamiento") and validar_tiempo(tiempo_entrenado):
                     # Crear un diccionario con los datos del entrenamiento
                     registro = {
-                        "Fecha": fecha_hora.strftime("%d-%m-%Y"),
+                        "Fecha": fecha_hora.strftime("%d/%m/%Y"),
                         "Tiempo entrenado": tiempo_entrenado,
                         "Sensación": sensacion,
                         **ejercicios_realizados
                     }
 
-                    # Guardar el registro en Google Sheets
-                    nombre_hoja = "data_animalaco" if tab_name == "Animalaco" else "data_mamasota"
-                    df = guardar_entrenamiento(df, registro, nombre_hoja)
+                    # Guardar el registro en el DataFrame y en el archivo CSV
+                    df = guardar_entrenamiento(df, registro, archivo)
 
                     # Reiniciar la página
                     st.rerun()
 
     return df
-
-
-
-
